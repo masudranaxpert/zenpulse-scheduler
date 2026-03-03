@@ -10,7 +10,7 @@ dependencies = [
     "apscheduler>=3.6.3",
 ]
 description = "A DB-driven APScheduler for Django"
-readme = "zenpulse_scheduler/README.md"
+readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
     "Framework :: Django",
