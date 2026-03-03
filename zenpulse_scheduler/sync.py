@@ -5,15 +5,66 @@ from .triggers import build_trigger
 
 logger = logging.getLogger(__name__)
 
+def _auto_create_configs():
+    """
+    Auto-create ScheduleConfig entries for registered jobs that
+    don't yet have a database entry. Uses defaults from the decorator.
+    """
+    registered_jobs = JobRegistry.get_all_entries()
+    if not registered_jobs:
+        return
+
+    existing_keys = set(
+        ScheduleConfig.objects.values_list('job_key', flat=True)
+    )
+
+    for job_key, entry in registered_jobs.items():
+        if job_key in existing_keys:
+            continue
+
+        defaults = entry.get('defaults', {})
+
+        config_data = {
+            'job_key': job_key,
+            'enabled': defaults.get('enabled', True),
+            'trigger_type': defaults.get('trigger', 'interval'),
+            'interval_value': defaults.get('interval_value', 5),
+            'interval_unit': defaults.get('interval_unit', 'minutes'),
+            'cron_minute': defaults.get('cron_minute', '*'),
+            'cron_hour': defaults.get('cron_hour', '*'),
+            'cron_day': defaults.get('cron_day', '*'),
+            'cron_month': defaults.get('cron_month', '*'),
+            'cron_day_of_week': defaults.get('cron_day_of_week', '*'),
+            'max_instances': defaults.get('max_instances', 1),
+            'coalesce': defaults.get('coalesce', True),
+            'misfire_grace_time': defaults.get('misfire_grace_time', 60),
+            'log_policy': defaults.get('log_policy', 'failures'),
+        }
+
+        try:
+            ScheduleConfig.objects.create(**config_data)
+            trigger_info = config_data['trigger_type']
+            if trigger_info == 'interval':
+                trigger_info += f" ({config_data['interval_value']} {config_data['interval_unit']})"
+            logger.info(
+                f"Auto-created ScheduleConfig for job '{job_key}' "
+                f"[{trigger_info}, enabled={config_data['enabled']}]"
+            )
+        except Exception as e:
+            logger.error(f"Failed to auto-create config for job '{job_key}': {e}")
+
+
 def sync_jobs(scheduler, last_synced_data):
     """
     Reconciles the DB ScheduleConfig with the in-memory APScheduler.
     last_synced_data: dict {job_key: (enabled, updated_at_timestamp)}
     """
     logger.debug("Starting sync_jobs...")
-    # print("DEBUG: Syncing jobs...") 
+
+    # Step 0: Auto-create DB configs for any new registered jobs
+    _auto_create_configs()
+
     configs = ScheduleConfig.objects.all()
-    # print(f"DEBUG: Found {len(configs)} configs in DB.")
     
     # Track which jobs we've seen in the DB to handle removals
     active_db_jobs = set()
@@ -69,9 +120,7 @@ def sync_jobs(scheduler, last_synced_data):
             logger.error(f"Failed to add/update job {job_key}: {e}")
 
     # 5. Remove jobs that are in Scheduler but NOT in Config (or deleted from DB)
-    # Be careful not to remove internal scheduler jobs if any (usually none in MemoryJobStore unless added manually)
     for job in scheduler.get_jobs():
         if job.id not in active_db_jobs:
             logger.info(f"Job {job.id} not in DB config. Removing.")
             scheduler.remove_job(job.id)
-    

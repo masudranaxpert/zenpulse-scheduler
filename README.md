@@ -60,12 +60,25 @@ Create a file (e.g., `yourapp/jobs.py`) and register your job:
 ```python
 from zenpulse_scheduler.registry import zenpulse_job
 
+# Basic: auto-creates with default schedule (every 5 minutes, enabled)
 @zenpulse_job("send_daily_report")
 def send_daily_report():
     """Send daily sales report via email"""
     print("📧 Sending daily report...")
     # Your business logic here
+
+# Custom interval: runs every 30 seconds
+@zenpulse_job("health_check", trigger="interval", interval_value=30, interval_unit="seconds")
+def health_check():
+    print("💓 Health check...")
+
+# Cron schedule: runs daily at 8:30 AM
+@zenpulse_job("morning_report", trigger="cron", cron_hour="8", cron_minute="30")
+def morning_report():
+    print("📊 Generating morning report...")
 ```
+
+> **🚀 Auto-Sync:** When the scheduler starts, it automatically creates a `ScheduleConfig` entry in the database for any new registered job. No need to manually add it in Django Admin!
 
 **Important:** Make sure this file is imported when Django starts. You can do this by:
 
@@ -103,16 +116,17 @@ You should see:
 
 ```
 Starting ZenPulse Scheduler (Sync: 10s, Lock: False)...
+Auto-created ScheduleConfig for job 'send_daily_report' [interval (5 minutes), enabled=True]
 ```
 
-### 3. Configure via Admin
+### 3. (Optional) Fine-tune via Admin
+
+Jobs are **auto-configured** from the decorator defaults. But if you want to change settings later:
 
 1. Go to **Django Admin** → **ZenPulse Scheduler** → **Schedule Configs**
-2. Click **Add Schedule Config**
-3. Fill in the details (see Configuration Guide below)
-4. Save
-
-Your job will start running automatically!
+2. Edit the auto-created entry
+3. Change schedule, enable/disable, adjust log policy, etc.
+4. Save — changes apply within the next sync interval (no restart needed!)
 
 ---
 
