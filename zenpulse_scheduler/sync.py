@@ -74,3 +74,4 @@ def sync_jobs(scheduler, last_synced_data):
         if job.id not in active_db_jobs:
             logger.info(f"Job {job.id} not in DB config. Removing.")
             scheduler.remove_job(job.id)
+    
